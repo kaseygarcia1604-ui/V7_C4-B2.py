@@ -1,0 +1,119 @@
+# policy_config_c4_b2.yaml
+# Configuracion de riesgo de RiskAval calibrada con los valores REALES
+# del motor MOTOR_KMT_C4_B_SHADOW (delta_std=1.5) -- no valores de ejemplo.
+# account_id, capital, max_contratos, perdida_max_dia/sem y news_blackout
+# vienen directo del CFG real del motor.
+#
+# NOTA DE DISEÑO: los limites de perdida diaria/semanal aqui son una
+# SEGUNDA linea de defensa, no la primera -- el motor ya tiene su propio
+# circuit breaker nativo (Cerebro._breakers()) que bloquea entradas antes
+# de llegar aqui. Esta capa existe para dejar el registro de auditoria
+# estructurado y anonimizable (AuditEntry) que _breakers() no produce,
+# y como respaldo si _breakers() alguna vez tuviera un bug.
+#
+# IMPORTANTE: cualquier "condition" que sea un booleano literal debe ir
+# ENTRE COMILLAS ("true", no true) -- si no, YAML lo convierte en un
+# bool de Python antes de llegar a eval(), y el motor lo bloquea por
+# fallo interno en vez de aplicar la regla.
+
+account_id: "motor-kmt-c4-b2-shadow"
+
+rules:
+  # Espejo exacto de CFG["perdida_max_dia"] / CFG["perdida_max_sem"] --
+  # si cambias esos valores en el motor, actualiza tambien aqui.
+  max_daily_loss: -800
+  max_weekly_loss: -2000
+  max_contracts: 2
+
+  # Espejo de CFG["hora_ini"] / CFG["hora_fin_entradas"] -- ventana casi
+  # de 24h, solo cierra durante mantenimiento CME (17:00-18:00 NY, que
+  # el motor ya excluye por su cuenta antes de llegar aqui tambien).
+  trading_window:
+    start: "00:00"
+    end: "23:50"
+
+  # Espejo de CFG["news_blackout_min"]
+  news_blackout_minutes: 20
+
+# Tier 1 -- BLOCK: la accion se detiene, no se ejecuta contra el broker.
+block:
+  - action: open_position
+    condition: "daily_pnl <= rules.max_daily_loss"
+    reason: "Limite de perdida diaria alcanzado (segunda linea de defensa)"
+
+  - action: open_position
+    condition: "weekly_pnl <= rules.max_weekly_loss"
+    reason: "Limite de perdida semanal alcanzado (segunda linea de defensa)"
+
+  - action: open_position
+    condition: "params.get('contracts', 0) > rules.max_contracts"
+    reason: "Tamano de posicion (orden individual) excede el maximo permitido"
+
+  - action: open_position
+    condition: "(open_contracts + params.get('contracts', 0)) > rules.max_contracts"
+    reason: "Excede exposicion total combinada permitida"
+
+  - action: increase_size
+    condition: "(open_contracts + params.get('contracts', 0)) > rules.max_contracts"
+    reason: "Agregar a una posicion abierta excede la exposicion total permitida"
+
+  - action: open_position
+    condition: "not in_trading_window(current_time, rules.trading_window)"
+    reason: "Fuera de la ventana horaria permitida"
+
+  - action: increase_size
+    condition: "not in_trading_window(current_time, rules.trading_window)"
+    reason: "Fuera de la ventana horaria permitida"
+
+  - action: open_position
+    condition: "minutes_to_next_news_event is not None and minutes_to_next_news_event < rules.news_blackout_minutes"
+    reason: "Dentro de la ventana de blackout por noticia de alto impacto"
+
+  - action: increase_size
+    condition: "minutes_to_next_news_event is not None and minutes_to_next_news_event < rules.news_blackout_minutes"
+    reason: "Dentro de la ventana de blackout por noticia de alto impacto"
+
+# Tier 2 -- LOG: la accion se permite, pero queda marcada para revision.
+log:
+  - action: open_position
+    condition: "daily_pnl <= (rules.max_daily_loss * 0.6)"
+    reason: "Cerca del limite de perdida diaria -- monitorear"
+
+  - action: modify_stop
+    condition: "true"
+    reason: "Modificacion de stop -- registrado para auditoria"
+
+  - action: modify_target
+    condition: "true"
+    reason: "Modificacion de target -- registrado para auditoria"
+
+  - action: close_position
+    condition: "true"
+    reason: "Cierre de posicion -- registrado para auditoria"
+
+  # NUEVA (authority_calibrator.py), EN OBSERVACION (jul 2026): antes de
+  # bloquear ordenes reales con esto, se deja en LOG durante un periodo
+  # inicial en C1/C2. Idea: si esto dispara con frecuencia, hay una
+  # desalineacion real entre lo que Kelly calcula y lo que este
+  # calibrador standalone calcula, y bloquear ciegamente arriesgaria
+  # rechazar entradas validas por error de escala/parametros, no por
+  # riesgo real. Si dispara muy rara vez (o nunca) tras suficientes
+  # datos reales, se sube a la seccion "block" de arriba. Si dispara
+  # seguido, hay que investigar el desajuste antes de bloquear nada.
+  # authority_is_calibrated es False mientras no haya muestra suficiente
+  # (menos de kelly_min_trades resultados) -- el "and" hace cortocircuito
+  # y esta regla no aplica en ese caso, aun estando en log.
+  - action: open_position
+    condition: "authority_is_calibrated and params.get('contracts', 0) * 400 > calibrated_authority * 1.5"
+    reason: "Contratos solicitados exceden 1.5x la autoridad calibrada por track record reciente (EN OBSERVACION)"
+
+# RESUELTO (era la nota PENDIENTE anterior): la regla de
+# calibrated_authority arriba SI se dispara de verdad, porque ya no
+# depende de que _riesgo_kelly() exponga su fraccion cruda -- en vez
+# de eso, authority_calibrator.py REPLICA la misma formula (half-Kelly
+# con piso y techo) de forma standalone, alimentada por outcome_history
+# (equivalente a self.e.trades), y PolicyEngine.evaluate() la calcula
+# el mismo internamente. account_id de este YAML debe coincidir con el
+# authority_calibrator configurado en el motor que lo use -- ver
+# authority_calibrator.py e integration_example.py para el detalle
+# exacto de conexion con Ejecutor.entrar().
