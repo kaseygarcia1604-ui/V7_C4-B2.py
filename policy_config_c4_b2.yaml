@@ -1,6 +1,6 @@
 # policy_config_c4_b2.yaml
 # Configuracion de riesgo de RiskAval calibrada con los valores REALES
-# del motor MOTOR_KMT_C4_B_SHADOW (delta_std=1.5) -- no valores de ejemplo.
+# del motor MOTOR_KMT_C4_B2_SHADOW (delta_std=1.5) -- no valores de ejemplo.
 # account_id, capital, max_contratos, perdida_max_dia/sem y news_blackout
 # vienen directo del CFG real del motor.
 #
