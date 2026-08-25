@@ -125,7 +125,7 @@ CFG = {
     "riesgo_trade": 400,
     "riesgo_minimo_dolares": 400,
     "usd_punto": 2.0,
-    "max_contratos": 2,
+    "max_contratos": 4,
     "perdida_max_dia": 800,
     "perdida_max_sem": 2000,
 

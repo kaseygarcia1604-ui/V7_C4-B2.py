@@ -23,7 +23,7 @@ rules:
   # si cambias esos valores en el motor, actualiza tambien aqui.
   max_daily_loss: -800
   max_weekly_loss: -2000
-  max_contracts: 2
+  max_contracts: 4
 
   # Espejo de CFG["hora_ini"] / CFG["hora_fin_entradas"] -- ventana casi
   # de 24h, solo cierra durante mantenimiento CME (17:00-18:00 NY, que
