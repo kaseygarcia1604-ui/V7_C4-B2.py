@@ -115,8 +115,8 @@ CFG = {
 
     # >>> UNICO CAMBIO respecto a C4_B <<<
     # Antes (C4_B): sl_atr=0.35, tp_atr=1.75 (RR=5:1)
-    # Ahora (esta variante): sl_atr=0.60, tp_atr=1.80 (RR=3:1)
-    "sl_atr": 0.60,
+    # Ahora (esta variante): sl_atr=0.90, tp_atr=1.80 (RR=2:1)
+    "sl_atr": 0.90,
     "tp_atr": 1.80,
     "atr_per": 20,
 
@@ -1253,7 +1253,7 @@ def main():
     hilo_kill_switch.start()
 
     estado_inicial = "PAUSADO (recuperado)" if e.pausado else "ACTIVO"
-    tg.enviar(f"Motor KMT [C4_B2, 1v solo-largo, k=1.5, 60s, SL=0.60/TP=1.80 RR3:1] iniciado | "
+    tg.enviar(f"Motor KMT [C4_B2, 1v solo-largo, k=1.5, 60s, SL=0.90/TP=1.80 RR2:1] iniciado | "
               f"{'SHADOW' if shadow else 'LIVE'} | capital=${CFG['capital']} | {estado_inicial}\n"
               f"Comandos: /pausar /reanudar /estado")
 
